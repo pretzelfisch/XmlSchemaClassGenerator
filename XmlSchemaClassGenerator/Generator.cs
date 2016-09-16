@@ -209,7 +209,8 @@ namespace XmlSchemaClassGenerator
             if (!string.IsNullOrEmpty(result))
                 return result;
 
-            throw new Exception(string.Format("Namespace {0} not provided through map or generator.", xmlNamespace));
+            return source.Segments.Last ().Replace ('.','_');
+            //throw new Exception(string.Format("Namespace {0} not provided through map or generator.", xmlNamespace));
         }
 
         private static readonly Dictionary<char, string> InvalidChars = CreateInvalidChars();
