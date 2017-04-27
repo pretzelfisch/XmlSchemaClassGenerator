@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Mono.Options;
+using System.Runtime.InteropServices;
 
 namespace XmlSchemaClassGenerator.Console
 {
@@ -55,8 +56,7 @@ namespace XmlSchemaClassGenerator.Console
             }
         }
         [DllImport ( "shell32.dll", SetLastError = true )]
-        static extern IntPtr CommandLineToArgvW (
-[MarshalAs ( UnmanagedType.LPWStr )] string lpCmdLine, out int pNumArgs );
+        static extern IntPtr CommandLineToArgvW ([MarshalAs ( UnmanagedType.LPWStr )] string lpCmdLine, out int pNumArgs );
         private static void RunCommand ( string[] args )
         {
             var showHelp = false;
