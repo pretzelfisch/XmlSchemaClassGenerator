@@ -145,6 +145,21 @@ namespace XmlSchemaClassGenerator
             set { _configuration.CodeTypeReferenceOptions = value; }
         }
 
+        public string TextValuePropertyName
+        {
+            get { return _configuration.TextValuePropertyName; }
+            set { _configuration.TextValuePropertyName = value; }
+        }
+
+        /// <summary>
+        /// Optional delegate that is called for each generated type member
+        /// </summary>
+        public Action<CodeTypeMember, PropertyModel> MemberVisitor
+        {
+            get { return _configuration.MemberVisitor; }
+            set { _configuration.MemberVisitor = value;}
+        }
+
         private readonly XmlSchemaSet Set = new XmlSchemaSet();
         private Dictionary<XmlQualifiedName, XmlSchemaAttributeGroup> AttributeGroups;
         private Dictionary<XmlQualifiedName, XmlSchemaGroup> Groups;
@@ -188,7 +203,7 @@ namespace XmlSchemaClassGenerator
                     provider.GenerateCodeFromCompileUnit(compileUnit, sw, new CodeGeneratorOptions { VerbatimOrder = true, BracingStyle = "C" });
                     var s = sw.ToString().Replace("};", "}"); // remove ';' at end of automatic properties
                     var path = Path.Combine(OutputFolder, ns.Name + ".cs");
-                    if (Log != null) Log(path);
+                    if (Log != null) { Log(path); }
                     File.WriteAllText(path, s);
                 }
             }
@@ -207,8 +222,9 @@ namespace XmlSchemaClassGenerator
             var key = new NamespaceKey(source, xmlNamespace);
             var result = NamespaceProvider.FindNamespace(key);
             if (!string.IsNullOrEmpty(result))
+            {
                 return result;
-
+            }
             return source.Segments.Last ().Replace ('.','_');
             //throw new Exception(string.Format("Namespace {0} not provided through map or generator.", xmlNamespace));
         }
@@ -311,7 +327,7 @@ namespace XmlSchemaClassGenerator
 
         public static string ToTitleCase(string s, NamingScheme namingScheme)
         {
-            if (string.IsNullOrEmpty(s)) return s;
+            if (string.IsNullOrEmpty(s)) { return s; }
             switch (namingScheme)
             {
                 case NamingScheme.PascalCase:
@@ -338,11 +354,18 @@ namespace XmlSchemaClassGenerator
             AttributeGroups = Set.Schemas().Cast<XmlSchema>().SelectMany(s => s.AttributeGroups.Values.Cast<XmlSchemaAttributeGroup>()).ToDictionary(g => g.QualifiedName);
             Groups = Set.Schemas().Cast<XmlSchema>().SelectMany(s => s.Groups.Values.Cast<XmlSchemaGroup>()).ToDictionary(g => g.QualifiedName);
 
+            foreach (var globalType in Set.GlobalTypes.Values.Cast<XmlSchemaType>())
+            {
+                var schema = globalType.GetSchema();
+                var source = (schema == null ? null : new Uri(schema.SourceUri));
+                var type = CreateTypeModel(source, globalType, globalType.QualifiedName);
+            }
+
             foreach (var rootElement in Set.GlobalElements.Values.Cast<XmlSchemaElement>())
             {
                 var source = new Uri(rootElement.GetSchema().SourceUri);
                 var qualifiedName = rootElement.ElementSchemaType.QualifiedName;
-                if (qualifiedName.IsEmpty) qualifiedName = rootElement.QualifiedName;
+                if (qualifiedName.IsEmpty) { qualifiedName = rootElement.QualifiedName; }
                 var type = CreateTypeModel(source, rootElement.ElementSchemaType, qualifiedName);
 
                 if (type.RootElementName != null)
@@ -389,13 +412,6 @@ namespace XmlSchemaClassGenerator
                     type.RootElementName = rootElement.QualifiedName;
                 }
             }
-
-            foreach (var globalType in Set.GlobalTypes.Values.Cast<XmlSchemaType>())
-            {
-                var schema = globalType.GetSchema();
-                var source = (schema == null ? null : new Uri(schema.SourceUri));
-                var type = CreateTypeModel(source, globalType, globalType.QualifiedName);
-            }
         }
 
         // see http://msdn.microsoft.com/en-us/library/z2w0sxhf.aspx
@@ -406,10 +422,12 @@ namespace XmlSchemaClassGenerator
         private TypeModel CreateTypeModel(Uri source, XmlSchemaAnnotated type, XmlQualifiedName qualifiedName)
         {
             TypeModel typeModel;
-            if (!qualifiedName.IsEmpty && Types.TryGetValue(qualifiedName, out typeModel)) return typeModel;
+            if (!qualifiedName.IsEmpty && Types.TryGetValue(qualifiedName, out typeModel)) { return typeModel; }
 
             if (source == null)
+            {
                 throw new ArgumentNullException("source");
+            }
             var namespaceModel = CreateNamespaceModel(source, qualifiedName);
 
             var docs = GetDocumentation(type);
@@ -418,7 +436,7 @@ namespace XmlSchemaClassGenerator
             if (group != null)
             {
                 var name = "I" + ToTitleCase(qualifiedName.Name);
-                if (namespaceModel != null) name = namespaceModel.GetUniqueTypeName(name);
+                if (namespaceModel != null) { name = namespaceModel.GetUniqueTypeName(name); }
 
                 var interfaceModel = new InterfaceModel(_configuration)
                 {
@@ -429,8 +447,8 @@ namespace XmlSchemaClassGenerator
 
                 interfaceModel.Documentation.AddRange(docs);
 
-                if (namespaceModel != null) namespaceModel.Types[name] = interfaceModel;
-                if (!qualifiedName.IsEmpty) Types[qualifiedName] = interfaceModel;
+                if (namespaceModel != null) { namespaceModel.Types[name] = interfaceModel; }
+                if (!qualifiedName.IsEmpty) { Types[qualifiedName] = interfaceModel; }
 
                 var particle = group.Particle;
                 var items = GetElements(particle);
@@ -447,7 +465,7 @@ namespace XmlSchemaClassGenerator
             if (attributeGroup != null)
             {
                 var name = "I" + ToTitleCase(qualifiedName.Name);
-                if (namespaceModel != null) name = namespaceModel.GetUniqueTypeName(name);
+                if (namespaceModel != null) { name = namespaceModel.GetUniqueTypeName(name); }
 
                 var interfaceModel = new InterfaceModel(_configuration)
                 {
@@ -458,8 +476,8 @@ namespace XmlSchemaClassGenerator
 
                 interfaceModel.Documentation.AddRange(docs);
 
-                if (namespaceModel != null) namespaceModel.Types[name] = interfaceModel;
-                if (!qualifiedName.IsEmpty) Types[qualifiedName] = interfaceModel;
+                if (namespaceModel != null) { namespaceModel.Types[name] = interfaceModel; }
+                if (!qualifiedName.IsEmpty) { Types[qualifiedName] = interfaceModel; }
 
                 var items = attributeGroup.Attributes;
                 var properties = CreatePropertiesForAttributes(source, interfaceModel, items.OfType<XmlSchemaAttribute>());
@@ -475,7 +493,7 @@ namespace XmlSchemaClassGenerator
             if (complexType != null)
             {
                 var name = ToTitleCase(qualifiedName.Name);
-                if (namespaceModel != null) name = namespaceModel.GetUniqueTypeName(name);
+                if (namespaceModel != null) { name = namespaceModel.GetUniqueTypeName(name); }
 
                 var classModel = new ClassModel(_configuration)
                 {
@@ -497,20 +515,22 @@ namespace XmlSchemaClassGenerator
                     namespaceModel.Types[classModel.Name] = classModel;
                 }
 
-                if (!qualifiedName.IsEmpty) Types[qualifiedName] = classModel;
+                if (!qualifiedName.IsEmpty) { Types[qualifiedName] = classModel; }
 
                 if (complexType.BaseXmlSchemaType != null && complexType.BaseXmlSchemaType.QualifiedName != AnyType)
                 {
                     var baseModel = CreateTypeModel(source, complexType.BaseXmlSchemaType, complexType.BaseXmlSchemaType.QualifiedName);
                     classModel.BaseClass = baseModel;
-                    if (baseModel is ClassModel) ((ClassModel)classModel.BaseClass).DerivedTypes.Add(classModel);
+                    if (baseModel is ClassModel) { ((ClassModel)classModel.BaseClass).DerivedTypes.Add(classModel); }
                 }
 
                 XmlSchemaParticle particle = null;
                 if (classModel.BaseClass != null)
                 {
                     if (complexType.ContentModel.Content is XmlSchemaComplexContentExtension)
+                    {
                         particle = ((XmlSchemaComplexContentExtension)complexType.ContentModel.Content).Particle;
+                    }
 
                     // If it's a restriction, do not duplicate elements on the derived class, they're already in the base class.
                     // See https://msdn.microsoft.com/en-us/library/f3z3wh0y.aspx
@@ -534,9 +554,13 @@ namespace XmlSchemaClassGenerator
                 if (classModel.BaseClass != null)
                 {
                     if (complexType.ContentModel.Content is XmlSchemaComplexContentExtension)
+                    {
                         attributes = ((XmlSchemaComplexContentExtension)complexType.ContentModel.Content).Attributes;
+                    }
                     else if (complexType.ContentModel.Content is XmlSchemaSimpleContentExtension)
+                    {
                         attributes = ((XmlSchemaSimpleContentExtension)complexType.ContentModel.Content).Attributes;
+                    }
 
                     // If it's a restriction, do not duplicate attributes on the derived class, they're already in the base class.
                     // See https://msdn.microsoft.com/en-us/library/f3z3wh0y.aspx
@@ -545,7 +569,7 @@ namespace XmlSchemaClassGenerator
                     //else if (complexType.ContentModel.Content is XmlSchemaSimpleContentRestriction)
                     //    attributes = ((XmlSchemaSimpleContentRestriction)complexType.ContentModel.Content).Attributes;
                 }
-                else attributes = complexType.Attributes;
+                else { attributes = complexType.Attributes; }
 
                 if (attributes != null)
                 {
@@ -596,7 +620,7 @@ namespace XmlSchemaClassGenerator
                     {
                         // we got an enum
                         var name = ToTitleCase(qualifiedName.Name);
-                        if (namespaceModel != null) name = namespaceModel.GetUniqueTypeName(name);
+                        if (namespaceModel != null) { name = namespaceModel.GetUniqueTypeName(name); }
 
                         var enumModel = new EnumModel(_configuration)
                         {
@@ -631,7 +655,7 @@ namespace XmlSchemaClassGenerator
                             namespaceModel.Types[enumModel.Name] = enumModel;
                         }
 
-                        if (!qualifiedName.IsEmpty) Types[qualifiedName] = enumModel;
+                        if (!qualifiedName.IsEmpty) { Types[qualifiedName] = enumModel; }
 
                         return enumModel;
                     }
@@ -640,7 +664,7 @@ namespace XmlSchemaClassGenerator
                 }
 
                 var simpleModelName = ToTitleCase(qualifiedName.Name);
-                if (namespaceModel != null) simpleModelName = namespaceModel.GetUniqueTypeName(simpleModelName);
+                if (namespaceModel != null) { simpleModelName = namespaceModel.GetUniqueTypeName(simpleModelName); }
 
                 var simpleModel = new SimpleModel(_configuration)
                 {
@@ -659,7 +683,7 @@ namespace XmlSchemaClassGenerator
                     namespaceModel.Types[simpleModel.Name] = simpleModel;
                 }
 
-                if (!qualifiedName.IsEmpty) Types[qualifiedName] = simpleModel;
+                if (!qualifiedName.IsEmpty) { Types[qualifiedName] = simpleModel; }
 
                 return simpleModel;
             }
@@ -691,14 +715,19 @@ namespace XmlSchemaClassGenerator
                                 attributeQualifiedName = new XmlQualifiedName(typeName, typeModel.XmlSchemaName.Namespace);
                                 // try to avoid name clashes
                                 if (NameExists(attributeQualifiedName))
+                                {
                                     attributeQualifiedName = new[] { "Item", "Property", "Element" }
                                         .Select(s => new XmlQualifiedName(attributeQualifiedName.Name + s, attributeQualifiedName.Namespace))
                                         .First(n => !NameExists(n));
+                                }
                             }
                         }
 
                         var attributeName = ToTitleCase(attribute.QualifiedName.Name);
-                        if (attributeName == typeModel.Name) attributeName += "Property"; // member names cannot be the same as their enclosing type
+                        if (attributeName == typeModel.Name)
+                        {
+                            attributeName += "Property"; // member names cannot be the same as their enclosing type
+                        } 
 
                         var property = new PropertyModel(_configuration)
                         {
@@ -708,7 +737,7 @@ namespace XmlSchemaClassGenerator
                             Type = CreateTypeModel(source, attribute.AttributeSchemaType, attributeQualifiedName),
                             IsAttribute = true,
                             IsNullable = attribute.Use != XmlSchemaUse.Required,
-                            DefaultValue = attribute.DefaultValue,
+                            DefaultValue = attribute.DefaultValue ?? (attribute.Use != XmlSchemaUse.Optional ? attribute.FixedValue : null),
                             Form = attribute.Form == XmlSchemaForm.None ? attribute.GetSchema().AttributeFormDefault : attribute.Form,
                             XmlNamespace = attribute.QualifiedName.Namespace != "" && attribute.QualifiedName.Namespace != typeModel.XmlSchemaName.Namespace ? attribute.QualifiedName.Namespace : null,
                         };
@@ -725,7 +754,9 @@ namespace XmlSchemaClassGenerator
                     if (attributeGroupRef != null)
                     {
                         if (GenerateInterfaces)
+                        {
                             CreateTypeModel(new Uri(attributeGroupRef.SourceUri), AttributeGroups[attributeGroupRef.RefName], attributeGroupRef.RefName);
+                        }
 
                         var groupItems = AttributeGroups[attributeGroupRef.RefName].Attributes;
                         var groupProperties = CreatePropertiesForAttributes(source, typeModel, groupItems.Cast<XmlSchemaObject>());
@@ -762,14 +793,19 @@ namespace XmlSchemaClassGenerator
                             elementQualifiedName = new XmlQualifiedName(typeName, typeModel.XmlSchemaName.Namespace);
                             // try to avoid name clashes
                             if (NameExists(elementQualifiedName))
+                            {
                                 elementQualifiedName = new[] { "Item", "Property", "Element" }
                                     .Select(s => new XmlQualifiedName(elementQualifiedName.Name + s, elementQualifiedName.Namespace))
                                     .First(n => !NameExists(n));
+                            }
                         }
                     }
 
                     var propertyName = ToTitleCase(element.QualifiedName.Name);
-                    if (propertyName == typeModel.Name) propertyName += "Property"; // member names cannot be the same as their enclosing type
+                    if (propertyName == typeModel.Name)
+                    {
+                        propertyName += "Property"; // member names cannot be the same as their enclosing type
+                    } 
 
                     property = new PropertyModel(_configuration)
                     {
@@ -780,7 +816,7 @@ namespace XmlSchemaClassGenerator
                         IsNillable = element.IsNillable,
                         IsNullable = item.MinOccurs < 1.0m,
                         IsCollection = item.MaxOccurs > 1.0m || particle.MaxOccurs > 1.0m, // http://msdn.microsoft.com/en-us/library/vstudio/d3hx2s7e(v=vs.100).aspx
-                        DefaultValue = element.DefaultValue,
+                        DefaultValue = element.DefaultValue ?? (item.MinOccurs >= 1.0m ? element.FixedValue : null),
                         Form = element.Form == XmlSchemaForm.None ? element.GetSchema().ElementFormDefault : element.Form,
                         XmlNamespace = element.QualifiedName.Namespace != "" && element.QualifiedName.Namespace != typeModel.XmlSchemaName.Namespace ? element.QualifiedName.Namespace : null,
                     };
@@ -806,7 +842,9 @@ namespace XmlSchemaClassGenerator
                         if (groupRef != null)
                         {
                             if (GenerateInterfaces)
+                            {
                                 CreateTypeModel(new Uri(groupRef.SourceUri), Groups[groupRef.RefName], groupRef.RefName);
+                            }
 
                             var groupItems = GetElements(groupRef.Particle);
                             var groupProperties = CreatePropertiesForElements(source, typeModel, item.XmlParticle, groupItems);
@@ -824,7 +862,9 @@ namespace XmlSchemaClassGenerator
                     property.Documentation.AddRange(itemDocs);
 
                     if (EmitOrder)
+                    {
                         property.Order = order++;
+                    }
                     property.IsDeprecated = itemDocs.Any(d => d.Text.StartsWith("DEPRECATED"));
 
                     properties.Add(property);
@@ -864,32 +904,48 @@ namespace XmlSchemaClassGenerator
 
             if (DataAnnotationMode == XmlSchemaClassGenerator.DataAnnotationMode.All)
             {
-                if (min > 0) yield return new MinLengthRestrictionModel(_configuration) { Value = min };
-                if (max > 0) yield return new MaxLengthRestrictionModel(_configuration) { Value = max };
+                if (min > 0) { yield return new MinLengthRestrictionModel(_configuration) { Value = min }; }
+                if (max > 0) { yield return new MaxLengthRestrictionModel(_configuration) { Value = max }; }
             }
             else if (min > 0 || max > 0)
+            {
                 yield return new MinMaxLengthRestrictionModel(_configuration) { Min = min, Max = max };
+            }
 
             foreach (var facet in facets)
             {
                 if (facet is XmlSchemaTotalDigitsFacet)
+                {
                     yield return new TotalDigitsRestrictionModel(_configuration) { Value = int.Parse(facet.Value) };
+                }
                 if (facet is XmlSchemaFractionDigitsFacet)
+                {
                     yield return new FractionDigitsRestrictionModel(_configuration) { Value = int.Parse(facet.Value) };
+                }
 
                 if (facet is XmlSchemaPatternFacet)
+                {
                     yield return new PatternRestrictionModel(_configuration) { Value = facet.Value };
+                }
 
                 var valueType = type.Datatype.ValueType;
 
                 if (facet is XmlSchemaMinInclusiveFacet)
+                {
                     yield return new MinInclusiveRestrictionModel(_configuration) { Value = facet.Value, Type = valueType };
+                }
                 if (facet is XmlSchemaMinExclusiveFacet)
+                {
                     yield return new MinExclusiveRestrictionModel(_configuration) { Value = facet.Value, Type = valueType };
+                }
                 if (facet is XmlSchemaMaxInclusiveFacet)
+                {
                     yield return new MaxInclusiveRestrictionModel(_configuration) { Value = facet.Value, Type = valueType };
+                }
                 if (facet is XmlSchemaMaxExclusiveFacet)
+                {
                     yield return new MaxExclusiveRestrictionModel(_configuration) { Value = facet.Value, Type = valueType };
+                }
             }
         }
 
@@ -908,26 +964,28 @@ namespace XmlSchemaClassGenerator
 
         public IEnumerable<Particle> GetElements(XmlSchemaObject item)
         {
-            if (item == null) yield break;
+            if (item == null) { yield break; }
 
             var element = item as XmlSchemaElement;
-            if (element != null) yield return new Particle(element);
+            if (element != null) { yield return new Particle(element); }
 
             var any = item as XmlSchemaAny;
-            if (any != null) yield return new Particle(any);
+            if (any != null) { yield return new Particle(any); }
 
             var groupRef = item as XmlSchemaGroupRef;
-            if (groupRef != null) yield return new Particle(groupRef);
+            if (groupRef != null) { yield return new Particle(groupRef); }
 
             var itemGroupBase = item as XmlSchemaGroupBase;
             if (itemGroupBase != null)
+            {
                 foreach (var groupBaseElement in GetElements(itemGroupBase))
                     yield return groupBaseElement;
+            }
         }
 
         public List<DocumentationModel> GetDocumentation(XmlSchemaAnnotated annotated)
         {
-            if (annotated.Annotation == null) return new List<DocumentationModel>();
+            if (annotated.Annotation == null) { return new List<DocumentationModel>(); }
 
             return annotated.Annotation.Items.OfType<XmlSchemaDocumentation>()
                 .Where(d => d.Markup != null && d.Markup.Any())

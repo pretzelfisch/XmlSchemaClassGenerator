@@ -55,7 +55,9 @@ namespace XmlSchemaClassGenerator
             {
                 var type = typeModel.Generate();
                 if (type != null)
+                {
                     codeNamespace.Types.Add(type);
+                }
             }
 
             return codeNamespace;
@@ -73,9 +75,9 @@ namespace XmlSchemaClassGenerator
 
             foreach (var doc in docs.OrderBy(d => d.Language))
             {
+                var text = doc.Text;
                 var comment = string.Format(@"<para{0}>{1}</para>",
-                    string.IsNullOrEmpty(doc.Language) ? "" : string.Format(@" xml:lang=""{0}""", doc.Language),
-                    Regex.Replace(doc.Text, @"(^|[^\r])\n", "$1\r\n")); // normalize newlines
+                    string.IsNullOrEmpty(doc.Language) ? "" : string.Format(@" xml:lang=""{0}""", doc.Language), CodeUtilities.NormalizeNewlines(text));
                 yield return new CodeCommentStatement(comment, true);
             }
 
@@ -131,7 +133,9 @@ namespace XmlSchemaClassGenerator
                     // complain with "InvalidOperationException: Cannot include anonymous type '...'"
                     var classModel = this as ClassModel;
                     if (classModel == null || classModel.BaseClass == null)
+                    {
                         typeAttribute.Arguments.Add(new CodeAttributeArgument("AnonymousType", new CodePrimitiveExpression(true)));
+                    }
                 }
                 typeDeclaration.CustomAttributes.Add(typeAttribute);
             }
@@ -151,7 +155,9 @@ namespace XmlSchemaClassGenerator
         {
             var name = referencingNamespace == Namespace ? Name : string.Format("{2}{0}.{1}", Namespace.Name, Name, ((referencingNamespace ?? Namespace).IsAmbiguous ? "global::" : string.Empty));
             if (collection)
+            {
                 name = forInit ? SimpleModel.GetCollectionImplementationName(name, Configuration) : SimpleModel.GetCollectionDefinitionName(name, Configuration);
+            }
             return new CodeTypeReference(name);
         }
 
@@ -266,12 +272,14 @@ namespace XmlSchemaClassGenerator
             if (BaseClass != null)
             {
                 if (BaseClass is ClassModel)
+                {
                     classDeclaration.BaseTypes.Add(BaseClass.GetReferenceFor(Namespace, false));
-                else
+                }
+                else if (!string.IsNullOrEmpty(Configuration.TextValuePropertyName))
                 {
                     var typeReference = BaseClass.GetReferenceFor(Namespace, false);
 
-                    var member = new CodeMemberField(typeReference, "Value")
+                    var member = new CodeMemberField(typeReference, Configuration.TextValuePropertyName)
                     {
                         Attributes = MemberAttributes.Public,
                     };
@@ -313,7 +321,9 @@ namespace XmlSchemaClassGenerator
             }
 
             if (EnableDataBinding)
+            {
                 classDeclaration.BaseTypes.Add(new CodeTypeReference(typeof(INotifyPropertyChanged), Configuration.CodeTypeReferenceOptions));
+            }
 
             if (Configuration.EntityFramework && (BaseClass == null || !(BaseClass is ClassModel)))
             {
@@ -425,7 +435,7 @@ namespace XmlSchemaClassGenerator
                 switch (typeCode)
                 {
                     case PropertyValueTypeCode.ValueType:
-                        return string.Format(@"
+                        return CodeUtilities.NormalizeNewlines(string.Format(@"
         {{
             get
             {{
@@ -439,9 +449,9 @@ namespace XmlSchemaClassGenerator
                     OnPropertyChanged(""{1}"");
                 }}
             }}
-        }}", backingFieldName, memberName, (privateSetter ? "private " : string.Empty));
+        }}", backingFieldName, memberName, (privateSetter ? "private " : string.Empty)));
                     case PropertyValueTypeCode.Other:
-                        return string.Format(@"
+                        return CodeUtilities.NormalizeNewlines(string.Format(@"
         {{
             get
             {{
@@ -457,9 +467,9 @@ namespace XmlSchemaClassGenerator
                     OnPropertyChanged(""{1}"");
                 }}
             }}
-        }}", backingFieldName, memberName, (privateSetter ? "private " : string.Empty));
+        }}", backingFieldName, memberName, (privateSetter ? "private " : string.Empty)));
                     case PropertyValueTypeCode.Array:
-                        return string.Format(@"
+                        return CodeUtilities.NormalizeNewlines(string.Format(@"
         {{
             get
             {{
@@ -475,33 +485,33 @@ namespace XmlSchemaClassGenerator
                     OnPropertyChanged(""{1}"");
                 }}
             }}
-        }}", backingFieldName, memberName, (privateSetter ? "private " : string.Empty));
+        }}", backingFieldName, memberName, (privateSetter ? "private " : string.Empty)));
                 }
             }
 
             if (privateSetter)
             {
-                return string.Format(@"
+                return CodeUtilities.NormalizeNewlines(string.Format(@"
         {{
             get
             {{
                 return this.{0};
             }}
-        }}", backingFieldName);
+        }}", backingFieldName));
             }
             else
             {
-                return string.Format(@"
+                return CodeUtilities.NormalizeNewlines(string.Format(@"
         {{
             get
             {{
                 return this.{0};
             }}
-            {1}set
+            set
             {{
                 this.{0} = value;
             }}
-        }}", backingFieldName, (privateSetter ? "private " : string.Empty));
+        }}", backingFieldName));
             }
         }
 
@@ -679,12 +689,19 @@ namespace XmlSchemaClassGenerator
                 var specifiedName = Configuration.GenerateNullables ? Name + "Value" : Name;
                 var specifiedMember = new CodeMemberField(typeof(bool), specifiedName + "Specified { get; set; }");
                 specifiedMember.CustomAttributes.Add(ignoreAttribute);
-                if (Configuration.EntityFramework && Configuration.GenerateNullables) specifiedMember.CustomAttributes.Add(notMappedAttribute);
+                if (Configuration.EntityFramework && Configuration.GenerateNullables) { specifiedMember.CustomAttributes.Add(notMappedAttribute); }
                 specifiedMember.Attributes = MemberAttributes.Public;
                 var specifiedDocs = new[] { new DocumentationModel { Language = "en", Text = string.Format("Gets or sets a value indicating whether the {0} property is specified.", Name) },
                     new DocumentationModel { Language = "de", Text = string.Format("Ruft einen Wert ab, der angibt, ob die {0}-Eigenschaft spezifiziert ist, oder legt diesen fest.", Name) } };
                 specifiedMember.Comments.AddRange(DocumentationModel.GetComments(specifiedDocs).ToArray());
                 typeDeclaration.Members.Add(specifiedMember);
+
+                var specifiedMemberPropertyModel = new PropertyModel(Configuration)
+                {
+                    Name = specifiedName + "Specified"
+                };
+
+                Configuration.MemberVisitor(specifiedMember, specifiedMemberPropertyModel);
 
                 if (Configuration.GenerateNullables)
                 {
@@ -753,7 +770,7 @@ namespace XmlSchemaClassGenerator
                     editorBrowsableAttribute.Arguments.Add(new CodeAttributeArgument(new CodeFieldReferenceExpression(new CodeTypeReferenceExpression(typeof(EditorBrowsableState)), "Never")));
                     specifiedMember.CustomAttributes.Add(editorBrowsableAttribute);
                     member.CustomAttributes.Add(editorBrowsableAttribute);
-                    if (Configuration.EntityFramework) member.CustomAttributes.Add(notMappedAttribute);
+                    if (Configuration.EntityFramework) { member.CustomAttributes.Add(notMappedAttribute); }
                 }
             }
             else if ((IsCollection || isArray) && IsNullable && !IsAttribute)
@@ -766,7 +783,7 @@ namespace XmlSchemaClassGenerator
                     HasGet = true,
                 };
                 specifiedProperty.CustomAttributes.Add(ignoreAttribute);
-                if (Configuration.EntityFramework) specifiedProperty.CustomAttributes.Add(notMappedAttribute);
+                if (Configuration.EntityFramework) { specifiedProperty.CustomAttributes.Add(notMappedAttribute); }
                 specifiedProperty.Attributes = MemberAttributes.Public | MemberAttributes.Final;
 
                 var listReference = new CodePropertyReferenceExpression(new CodeThisReferenceExpression(), Name);
@@ -778,6 +795,8 @@ namespace XmlSchemaClassGenerator
                 var specifiedDocs = new[] { new DocumentationModel { Language = "en", Text = string.Format("Gets a value indicating whether the {0} collection is empty.", Name) },
                     new DocumentationModel { Language = "de", Text = string.Format("Ruft einen Wert ab, der angibt, ob die {0}-Collection leer ist.", Name) } };
                 specifiedProperty.Comments.AddRange(DocumentationModel.GetComments(specifiedDocs).ToArray());
+
+                Configuration.MemberVisitor(specifiedProperty, this);
 
                 typeDeclaration.Members.Add(specifiedProperty);
             }
@@ -827,6 +846,8 @@ namespace XmlSchemaClassGenerator
             {
                 member.CustomAttributes.Add(notMappedAttribute);
             }
+
+            Configuration.MemberVisitor(member, this);
         }
 
         private IEnumerable<CodeAttributeDeclaration> GetAttributes(bool isArray)
@@ -869,8 +890,10 @@ namespace XmlSchemaClassGenerator
                                 new CodeAttributeArgument(new CodePrimitiveExpression(derivedType.XmlSchemaName.Name)),
                                 new CodeAttributeArgument("Type", new CodeTypeOfExpression(derivedType.GetReferenceFor(OwningType.Namespace, false))));
                             if (Order != null)
+                            {
                                 derivedAttribute.Arguments.Add(new CodeAttributeArgument("Order",
                                     new CodePrimitiveExpression(Order.Value)));
+                            }
                             attributes.Add(derivedAttribute);
                         }
                     }
@@ -878,8 +901,10 @@ namespace XmlSchemaClassGenerator
                     var attribute = new CodeAttributeDeclaration(new CodeTypeReference(typeof(XmlElementAttribute), Configuration.CodeTypeReferenceOptions),
                             new CodeAttributeArgument(new CodePrimitiveExpression(XmlSchemaName.Name)));
                     if (Order != null)
+                    {
                         attribute.Arguments.Add(new CodeAttributeArgument("Order",
                             new CodePrimitiveExpression(Order.Value)));
+                    }
                     attributes.Add(attribute);
                 }
             }
@@ -907,16 +932,26 @@ namespace XmlSchemaClassGenerator
                 }
 
                 if (IsNillable)
+                {
                     attribute.Arguments.Add(new CodeAttributeArgument("IsNullable", new CodePrimitiveExpression(true)));
+                }
 
                 var simpleModel = Type as SimpleModel;
                 if (simpleModel != null && simpleModel.UseDataTypeAttribute)
                 {
-                    var name = Type.XmlSchemaType.GetQualifiedName();
-                    if (name.Namespace == XmlSchema.Namespace)
+                    // walk up the inheritance chain to find DataType if the simple type is derived (see #18)
+                    var xmlSchemaType = Type.XmlSchemaType;
+                    while (xmlSchemaType != null)
                     {
-                        var dataType = new CodeAttributeArgument("DataType", new CodePrimitiveExpression(name.Name));
-                        attribute.Arguments.Add(dataType);
+                        var name = xmlSchemaType.GetQualifiedName();
+                        if (name.Namespace == XmlSchema.Namespace && name.Name != "anySimpleType")
+                        {
+                            var dataType = new CodeAttributeArgument("DataType", new CodePrimitiveExpression(name.Name));
+                            attribute.Arguments.Add(dataType);
+                            break;
+                        }
+                        else
+                            xmlSchemaType = xmlSchemaType.BaseXmlSchemaType;
                     }
                 }
             }
@@ -1013,7 +1048,9 @@ namespace XmlSchemaClassGenerator
         {
             var typeRef = new CodeTypeReference(configuration.CollectionType, configuration.CodeTypeReferenceOptions);
             if (configuration.CollectionType.IsGenericTypeDefinition)
+            {
                 typeRef.TypeArguments.Add(typeName);
+            }
             var typeOfExpr = new CodeTypeOfExpression(typeRef);
             var writer = new System.IO.StringWriter();
             CSharpProvider.GenerateCodeFromExpression(typeOfExpr, writer, new CodeGeneratorOptions());
@@ -1027,7 +1064,9 @@ namespace XmlSchemaClassGenerator
         {
             var typeRef = new CodeTypeReference(configuration.CollectionImplementationType ?? configuration.CollectionType, configuration.CodeTypeReferenceOptions);
             if (configuration.CollectionType.IsGenericTypeDefinition)
+            {
                 typeRef.TypeArguments.Add(typeName);
+            }
             var typeOfExpr = new CodeTypeOfExpression(typeRef);
             var writer = new System.IO.StringWriter();
             CSharpProvider.GenerateCodeFromExpression(typeOfExpr, writer, new CodeGeneratorOptions());
@@ -1060,9 +1099,13 @@ namespace XmlSchemaClassGenerator
             if (collection)
             {
                 if (forInit)
+                {
                     type = (Configuration.CollectionImplementationType ?? Configuration.CollectionType).MakeGenericType(type);
+                }
                 else
+                {
                     type = Configuration.CollectionType.MakeGenericType(type);
+                }
             }
 
             return new CodeTypeReference(type, Configuration.CodeTypeReferenceOptions);

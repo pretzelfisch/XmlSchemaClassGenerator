@@ -22,7 +22,9 @@ namespace XmlSchemaClassGenerator
                         xn.Split('/').Where(p => Regex.IsMatch(p, @"^[A-Za-z]+$") && p != "schema")
                             .Select(n => Generator.ToTitleCase(n, NamingScheme.PascalCase)));
                     if (!string.IsNullOrEmpty(NamespacePrefix))
+                    {
                         name = NamespacePrefix + (string.IsNullOrEmpty(name) ? "" : ("." + name));
+                    }
                     return name;
                 },
             };
@@ -31,6 +33,7 @@ namespace XmlSchemaClassGenerator
             DataAnnotationMode = DataAnnotationMode.All;
             GenerateSerializableAttribute = GenerateDesignerCategoryAttribute = true;
             CollectionType = typeof(Collection<>);
+            MemberVisitor = (member, model) => { };
         }
 
         /// <summary>
@@ -113,6 +116,11 @@ namespace XmlSchemaClassGenerator
         public CodeTypeReferenceOptions CodeTypeReferenceOptions { get; set; }
 
         /// <summary>
+        /// The name of the property that will contain the text value of an XML element
+        /// </summary>
+        public string TextValuePropertyName { get; set; } = "Value";
+
+        /// <summary>
         /// Provides a fast and safe way to write to the Log
         /// </summary>
         /// <param name="messageCreator"></param>
@@ -122,7 +130,9 @@ namespace XmlSchemaClassGenerator
         public void WriteLog(Func<string> messageCreator)
         {
             if (Log != null)
+            {
                 Log(messageCreator());
+            }
         }
         /// <summary>
         /// Write the message to the log.
@@ -131,7 +141,14 @@ namespace XmlSchemaClassGenerator
         public void WriteLog(string message)
         {
             if (Log != null)
+            {
                 Log(message);
+            }
         }
+
+        /// <summary>
+        /// Optional delegate that is called for each generated type member
+        /// </summary>
+        public Action<CodeTypeMember, PropertyModel> MemberVisitor { get; set; }
     }
 }
